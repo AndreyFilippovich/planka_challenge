@@ -1,6 +1,3 @@
-import time as t
-
-
 def timer(starting_time=0):
 
     secs = starting_time
@@ -21,7 +18,6 @@ def timer(starting_time=0):
             m, s = divmod(secs, 60)
             time_text = f'{m:02d} min. {s:02d} sec.'
         print(time_text)
-        t.sleep(1)
 
 
 timer(5)
