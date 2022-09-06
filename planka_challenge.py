@@ -28,13 +28,36 @@ logging.basicConfig(
 
 URL = 'https://api.thecatapi.com/v1/images/search'
 
+DB_FILENAME = 'db.sqlite'
 QUOTES = dictionaries.quotes
 REPEATING_TIMES = 30
 REPEATING_COUNT = 7 - 1
 INCREMENT = 5
 
-AT_A_TIME = dt.time(6, 0, 0)  # 06:00AM Everyday
-
+# Время отправки сообщения пользователям
+AT_A_TIME = dt.time(7, 0, 0)  # 06:00AM Everyday
+BOT_START_MESSAGE = """Привет, {name}. Рад видеть тебя в числе участников 
+челленджа!\n
+Давай расскажу тебе, что умею:
+1- Каждый день в {time} по Московскому времени буду отправлять тебе время для 
+планки и стульчика
+2- По команде /newmotivation отправлю тебе мотивационную цитату, 
+чтобы были моральные силы
+3- По команде /newcat я отправлю тебе фотографию котика, чтобы поднять 
+настроение\n
+Чтобы убедиться в моей правоте держи фоточку котика"""
+WELCOME_MESSAGE = (
+    'Добро пожаловать в челенж! Начинаем с 5 секунд. Вы '
+    'подписаны на автоматические обновления, бот будет '
+    'присылать сообщение о вашем времени в планке каждое '
+    'утро. Отписаться можно в любой момент '
+    'командой /unsubscribe'
+)
+TIMER_MESSAGE = 'Ваш таймер для планки на сегодня: {formatted_time}'
+SEC = 'sec.'
+MIN = 'min.'
+TIMER_OUTPUT_FORMAT = '{m:02d} ' + MIN + ' {s:02d} ' + SEC
+API_REQUEST_ERROR = 'Ошибка при запросе к основному API: {error}'
 
 # тут мы получаем новые изображения котиков
 def get_new_image():
@@ -45,7 +68,7 @@ def get_new_image():
     try:
         response = requests.get(URL)
     except Exception as error:
-        logging.error(f'Ошибка при запросе к основному API: {error}')
+        logging.error(API_REQUEST_ERROR.format(error=error))
         new_url = 'https://api.thedogapi.com/v1/images/search'
         response = requests.get(new_url)
 
@@ -94,17 +117,10 @@ def start(update, context):
         [['/newcat'], ['/newmotivation'], ['/help'], ['/time']],
         resize_keyboard=True,
     )
+    time = AT_A_TIME.strftime('%H:%M')
     context.bot.send_message(
         chat_id=chat.id,
-        text='Привет, {}. Рад видеть тебя в числе участников челленджа!\n'
-        'Давай расскажу тебе, что умею: \n'
-        '1- Каждый день в 04:00 по Московскому времени буду отправлять тебе '
-        'время для планки и стульчика\n'
-        '2- По команде /newmotivation отправлю тебе мотивационную цитату, '
-        'чтобы были моральные силы\n'
-        '3- По команде /newcat я отправлю тебе фотографию котика, чтобы '
-        'поднять настроение\n'
-        'Чтобы убедиться в моей правоте держи фоточку котика'.format(name),
+        text=BOT_START_MESSAGE.format(name=name, time=time),
         reply_markup=button,
     )
     context.bot.send_photo(chat.id, get_new_image())
@@ -112,7 +128,7 @@ def start(update, context):
 
 def timers_updater(context):
     db_conn = sqlite3.connect(
-        'db.sqlite',
+        DB_FILENAME,
         detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
     )
     cursor = db_conn.cursor()
@@ -154,7 +170,7 @@ def timers_updater(context):
 def get_user_timer(uid):
     """Получает значение таймера для юзера из базы"""
     db_conn = sqlite3.connect(
-        'db.sqlite',
+        DB_FILENAME,
         detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
     )
     cursor = db_conn.cursor()
@@ -180,26 +196,20 @@ def format_message(time):
     # Если секунд меньше 60, то выводим в формате 20 sec.
     # Если больше минуты, то в формате 01 min. 25 sec.
     if time < 60:
-        time_text = str(time) + ' sec.'
+        time_text = str(time) + ' ' + SEC
     else:
         m, s = divmod(time, 60)
-        time_text = f'{m:02d} min. {s:02d} sec.'
+        time_text = TIMER_OUTPUT_FORMAT.format(m=m, s=s)
     return time_text
 
 
 def send_user_timer(context, uid, user_timer):
     if user_timer == INCREMENT:
         # TODO /unsubscribe не реализован
-        message = (
-            'Добро пожаловать в челенж! Начинаем с 5 секунд. Вы '
-            'подписаны на автоматические обновления, бот будет '
-            'присылать сообщение о вашем времени в планке каждое '
-            'утро. Отписаться можно в любой момент '
-            'командой /unsubscribe'
-        )
+        message = WELCOME_MESSAGE
     else:
         formatted_time = format_message(user_timer)
-        message = f'Ваш таймер для планки на сегодня: {formatted_time}'
+        message = TIMER_MESSAGE.format(formatted_time=formatted_time)
     context.bot.send_message(uid, message)
 
 
@@ -222,9 +232,7 @@ def main():
 
     # Обновляем таймеры всех юзеров раз в сутки в 04:00
     job_queue = updater.job_queue
-    job_once_a_day = job_queue.run_daily(
-        timers_updater, time=AT_A_TIME
-    )
+    job_once_a_day = job_queue.run_daily(timers_updater, time=AT_A_TIME)
 
     updater.start_polling()
     updater.idle()
