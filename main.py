@@ -7,7 +7,7 @@ import sqlite3
 import requests
 from dotenv import load_dotenv
 from telegram import ReplyKeyboardMarkup
-from telegram.ext import CommandHandler, Updater
+from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
 
 import dictionaries
 
@@ -41,11 +41,13 @@ BOT_START_MESSAGE = """Привет, {name}. Рад видеть тебя в ч�
 Давай расскажу тебе, что умею:
 1- Каждый день в {time} по Московскому времени буду отправлять тебе время для
 планки и стульчика
-2- По команде /newmotivation отправлю тебе мотивационную цитату,
+2- По команде "Мотивация" отправлю тебе мотивационную цитату,
 чтобы были моральные силы
-3- По команде /newcat я отправлю тебе фотографию котика, чтобы поднять
+3- По команде "Котик" я отправлю тебе фотографию котика, чтобы поднять
 настроение\n
-Чтобы убедиться в моей правоте держи фоточку котика"""
+Чтобы убедиться в моей правоте держи фоточку котика.\n\n
+Стоит упомянуть, что котики могут отдыхать на сервере, не зависящем от нас.
+Поэтому не увлекайтесь котиками слишком сильно."""
 WELCOME_MESSAGE = (
     'Добро пожаловать в челенж! Начинаем с 5 секунд. Вы '
     'подписаны на автоматические обновления, бот будет '
@@ -53,13 +55,22 @@ WELCOME_MESSAGE = (
     'утро. Отписаться можно в любой момент '
     'командой /unsubscribe'
 )
+UNSUBSCRIBE_MESSAGE = (
+    'Ничего страшного...\n'
+    'Это не шаг назад, а лишь разгон для рывка вперед!\n\n\n'
+    'Надеюсь, что этот шаг не в сторону ближайшего фастфуда.'
+)
+CATS_EXCEPTION = (
+    'Котики отдыхаю, но мы уже пошли их будить.'
+)
 TIMER_MESSAGE = 'Ваш таймер для планки на сегодня: {formatted_time}'
 SEC = 'sec.'
 MIN = 'min.'
 TIMER_OUTPUT_FORMAT = '{m:02d} ' + MIN + ' {s:02d} ' + SEC
 API_REQUEST_ERROR = 'Ошибка при запросе к основному API: {error}'
 
-main_button = ReplyKeyboardMarkup([['Котик'], ['Мотивация'], ['Помощь'], ['Челлендж']], resize_keyboard=True)
+main_button = ReplyKeyboardMarkup(
+    [['Котик'], ['Мотивация'], ['Помощь'], ['Челлендж']], resize_keyboard=True)
 
 
 # тут мы получаем новые изображения котиков
@@ -84,9 +95,11 @@ def new_cat(update, context):
     """Благодаря этой функции мы можем в боте вызывать команду с вызовом
     котиков.
     """
-    chat = update.effective_chat
-    context.bot.send_photo(chat.id, get_new_image())
-
+    try:
+        chat = update.effective_chat
+        context.bot.send_photo(chat.id, get_new_image())
+    except Exception as error:
+        context.bot.send_message(chat.id, text=CATS_EXCEPTION)
 
 # Тут мы получаем мотивационные цитаты
 def get_new_motivation():
@@ -116,15 +129,11 @@ def start(update, context):
     """
     chat = update.effective_chat
     name = update.message.chat.first_name
-    button = ReplyKeyboardMarkup(
-        [['/newcat'], ['/newmotivation'], ['/help'], ['/time']],
-        resize_keyboard=True,
-    )
     time = AT_A_TIME.strftime('%H:%M')
     context.bot.send_message(
         chat_id=chat.id,
         text=BOT_START_MESSAGE.format(name=name, time=time),
-        reply_markup=button,
+        reply_markup=main_button,
     )
     context.bot.send_photo(chat.id, get_new_image())
 
@@ -200,7 +209,7 @@ def unsubscribe(update, context):
     cur = db_conn.cursor()
     cur.execute('DELETE FROM timers WHERE uid== ?', (uid, ))
     db_conn.commit()
-    context.bot.send_message(uid, text='получилось!')
+    context.bot.send_message(uid, text=UNSUBSCRIBE_MESSAGE)
 
 
 def format_message(time):
@@ -235,14 +244,17 @@ def main():
     updater = Updater(token=secret_token, use_context=True)
 
     updater.dispatcher.add_handler(CommandHandler('start', start))
-    updater.dispatcher.add_handler(CommandHandler('newcat', new_cat))
-    updater.dispatcher.add_handler(
-        CommandHandler('newmotivation', new_motivation)
-    )
-    updater.dispatcher.add_handler(CommandHandler('help', start))
-    updater.dispatcher.add_handler(CommandHandler('time', planka_timer))
+
     updater.dispatcher.add_handler(CommandHandler('unsubscribe', unsubscribe))
 
+    updater.dispatcher.add_handler(
+        MessageHandler(Filters.regex('^Котик$'), new_cat))
+    updater.dispatcher.add_handler(
+        MessageHandler(Filters.regex('^Мотивация$'), new_motivation))
+    updater.dispatcher.add_handler(
+        MessageHandler(Filters.regex('^Помощь$'), start))
+    updater.dispatcher.add_handler(
+        MessageHandler(Filters.regex('^Челлендж$'), planka_timer))
     # Обновляем таймеры всех юзеров раз в сутки в 04:00
     job_queue = updater.job_queue
     job_once_a_day = job_queue.run_daily(timers_updater, time=AT_A_TIME)
