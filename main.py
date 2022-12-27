@@ -36,14 +36,14 @@ INCREMENT = 5
 
 # Время отправки сообщения пользователям
 AT_A_TIME = dt.time(7, 0, 0)  # 06:00AM Everyday
-BOT_START_MESSAGE = """Привет, {name}. Рад видеть тебя в числе участников 
+BOT_START_MESSAGE = """Привет, {name}. Рад видеть тебя в числе участников
 челленджа!\n
 Давай расскажу тебе, что умею:
-1- Каждый день в {time} по Московскому времени буду отправлять тебе время для 
+1- Каждый день в {time} по Московскому времени буду отправлять тебе время для
 планки и стульчика
-2- По команде /newmotivation отправлю тебе мотивационную цитату, 
+2- По команде /newmotivation отправлю тебе мотивационную цитату,
 чтобы были моральные силы
-3- По команде /newcat я отправлю тебе фотографию котика, чтобы поднять 
+3- По команде /newcat я отправлю тебе фотографию котика, чтобы поднять
 настроение\n
 Чтобы убедиться в моей правоте держи фоточку котика"""
 WELCOME_MESSAGE = (
@@ -58,6 +58,9 @@ SEC = 'sec.'
 MIN = 'min.'
 TIMER_OUTPUT_FORMAT = '{m:02d} ' + MIN + ' {s:02d} ' + SEC
 API_REQUEST_ERROR = 'Ошибка при запросе к основному API: {error}'
+
+main_button = ReplyKeyboardMarkup([['Котик'], ['Мотивация'], ['Помощь'], ['Челлендж']], resize_keyboard=True)
+
 
 # тут мы получаем новые изображения котиков
 def get_new_image():
@@ -191,6 +194,15 @@ def get_user_timer(uid):
     return row[2]  # Поле timer в БД
 
 
+def unsubscribe(update, context):
+    uid = update.message.from_user.id
+    db_conn = sqlite3.connect(DB_FILENAME)
+    cur = db_conn.cursor()
+    cur.execute('DELETE FROM timers WHERE uid== ?', (uid, ))
+    db_conn.commit()
+    context.bot.send_message(uid, text='получилось!')
+
+
 def format_message(time):
     # Формирует сообщение в зависимости от времени
     # Если секунд меньше 60, то выводим в формате 20 sec.
@@ -229,6 +241,7 @@ def main():
     )
     updater.dispatcher.add_handler(CommandHandler('help', start))
     updater.dispatcher.add_handler(CommandHandler('time', planka_timer))
+    updater.dispatcher.add_handler(CommandHandler('unsubscribe', unsubscribe))
 
     # Обновляем таймеры всех юзеров раз в сутки в 04:00
     job_queue = updater.job_queue
