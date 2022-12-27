@@ -1,34 +1,23 @@
-import time
-def timer(min = 0, sec = 0):
-    seven_steps = 0
+def timer(starting_time=0):
 
-    timeloop = True
-    while timeloop:
-        print(str(min) + " Mins " + str(sec) + " Sec ")
-        time.sleep(1)
+    secs = starting_time
+    increment = 5
+    repeating_step = 0
+    repeating_times = 30
+    repeating_count = 7 - 1
 
-        if sec != 30 and sec != 60:
-            sec += 5
+    while True:
+        if repeating_step >= repeating_count or secs % repeating_times != 0:
+            secs += increment
+            repeating_step = 0
+        else:
+            repeating_step += 1
+        if secs < 60:
+            time_text = str(secs) + ' sec.'
+        else:
+            m, s = divmod(secs, 60)
+            time_text = f'{m:02d} min. {s:02d} sec.'
+        print(time_text)
 
-        elif sec == 30:
-            while seven_steps != 6:
-                print(str(min) + " Mins " + str(sec) + " Sec ")
-                time.sleep(1)
-                seven_steps += 1
-                if seven_steps == 6:
-                    sec += 5
-                continue
-         
-        if sec == 60:
-            sec = 0
-            min += 1
-            while seven_steps != 0:
-                print(str(min) + " Mins " + str(sec) + " Sec ")
-                time.sleep(1)
-                seven_steps -= 1
-                if seven_steps == -1:
-                    seven_steps +1
-                    sec += 5
-                continue
 
-print(timer(1, 5))
+timer(5)
